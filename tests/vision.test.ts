@@ -231,14 +231,25 @@ describe('SingleHandFlightController', () => {
   });
 
   it('rejects the wrong hand when a specific hand is selected', () => {
-    const b = new Bench();
+    const b = new Bench(); // calibrated with the right hand
     b.run(1.5, { x: 0.5 + 0.2 / ASPECT, y: 0.55, hand: 'Left' });
     expect(b.c.snapshot.status).toBe('wrong-hand');
     expect(b.out.roll).toBe(0);
-    b.c.settings.hand = 'Left';
+    b.run(1.5, { x: 0.5 + 0.2 / ASPECT, y: 0.55, hand: 'Right' });
+    expect(b.c.snapshot.status).toBe('tracking');
+    expect(b.out.roll).toBeGreaterThan(0.9);
+    // re-locking (e.g. the player switches hands in settings) accepts the other hand
+    b.c.lockHand('Left');
     b.run(1.5, { x: 0.5 + 0.2 / ASPECT, y: 0.55, hand: 'Left' });
     expect(b.c.snapshot.status).toBe('tracking');
     expect(b.out.roll).toBeGreaterThan(0.9);
+    // without a wizard calibration the controller locks onto the first hand it sees
+    const u = new Bench(false);
+    u.run(1.5, { x: 0.5, y: 0.55, hand: 'Left' });
+    expect(u.c.snapshot.status).toBe('tracking');
+    expect(u.c.trackedHand).toBe('Left');
+    u.run(1, { x: 0.5, y: 0.55, hand: 'Right' });
+    expect(u.c.snapshot.status).toBe('wrong-hand');
   });
 
   it('auto-centres on the first steady pose when no calibration exists', () => {
@@ -259,6 +270,31 @@ describe('SingleHandFlightController', () => {
     lo.run(1.5, p);
     hi.run(1.5, p);
     expect(hi.out.roll).toBeGreaterThan(lo.out.roll * 2);
+  });
+});
+
+describe('slow inference', () => {
+  it('does not report the hand as lost just because results arrive slowly', () => {
+    const b = new Bench();
+    // 4 results per second (a very slow machine): still tracking throughout
+    let lost = 0;
+    for (let i = 0; i < 20; i++) {
+      b.c.processHand(makeHand({ ...NEUTRAL, x: 0.5 + 0.2 / ASPECT }, b.now), ASPECT, b.now);
+      for (let k = 0; k < 15; k++) {
+        b.now += 1000 / 60;
+        b.out = b.c.update(1 / 60, b.now);
+        if (b.c.snapshot.status !== 'tracking') lost++;
+      }
+    }
+    expect(lost).toBe(0);
+    expect(b.out.roll).toBeGreaterThan(0.9);
+    // but a stalled tracker (no results at all) is treated as lost
+    for (let k = 0; k < 90; k++) {
+      b.now += 1000 / 60;
+      b.out = b.c.update(1 / 60, b.now);
+    }
+    expect(b.c.snapshot.status).toBe('lost');
+    expect(Math.abs(b.out.roll)).toBeLessThan(0.2);
   });
 });
 

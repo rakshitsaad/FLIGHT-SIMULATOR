@@ -69,6 +69,7 @@ export const THROTTLE_FULL_CLOSURE = 0.78;
 export const PAUSE_CLOSURE = 0.92;
 
 const LOST_AFTER_MS = 240;
+const STALL_AFTER_MS = 900;
 const ENGAGE_SECONDS = 0.45;
 const NEUTRAL_DECAY = 0.22; // s time constant back to neutral when the hand is lost
 const THROTTLE_SLEW = 2.2; // per second
@@ -136,6 +137,11 @@ export class SingleHandFlightController {
   private fa = new OneEuroFilter();
   private fo = new OneEuroFilter();
   private lastSeen = -Infinity;
+  /** Time of the last frame in which the detector reported no (usable) hand. */
+  private lastMiss = -Infinity;
+  /** The hand this controller is locked to (see processHand). */
+  private lockedHand: Handedness | null = null;
+  private lockVotes = { Left: 0, Right: 0 };
   private lastFrameT = 0;
   private tracking = false;
   private mismatch = 0;
@@ -178,6 +184,18 @@ export class SingleHandFlightController {
     this.calibration = { ...c, neutral: { ...c.neutral } };
     this.calibrated = fromWizard;
     this.autoNeutral = null;
+    this.lockHand(fromWizard ? c.hand : null);
+  }
+
+  /** Lock to a specific observed hand, or pass null to re-learn it from the next hand shown. */
+  lockHand(hand: Handedness | null): void {
+    this.lockedHand = hand;
+    this.lockVotes.Left = this.lockVotes.Right = 0;
+    this.mismatch = 0;
+    this.wrongHand = false;
+  }
+  get trackedHand(): Handedness | null {
+    return this.lockedHand;
   }
 
   /** Controller is switched on (camera running). */
@@ -242,11 +260,12 @@ export class SingleHandFlightController {
 
     // ---- one hand only, and it must be the selected one
     if (hand) {
-      const other = s.enforceHand && hand.handedness !== s.hand && hand.score > 0.8;
+      // "Selected hand" is enforced against the hand that was actually
+      // observed during calibration (or first acquisition), so a camera that
+      // mirrors its image cannot make the player's own hand look "wrong".
+      const other = s.enforceHand && this.lockedHand !== null && hand.handedness !== this.lockedHand && hand.score > 0.8;
       this.mismatch = other ? Math.min(this.mismatch + 1, 12) : Math.max(0, this.mismatch - 2);
-      // acquiring requires the selected hand; once tracking, tolerate a few
-      // misclassified frames (handedness can flicker while the hand turns)
-      const live = this.tracking && now - this.lastSeen <= LOST_AFTER_MS;
+      const live = this.tracking && now - this.lastSeen <= LOST_AFTER_MS * 2;
       this.wrongHand = live ? this.mismatch >= 6 : other || this.mismatch >= 6;
       if (this.wrongHand) hand = null;
     } else {
@@ -255,6 +274,7 @@ export class SingleHandFlightController {
     }
 
     if (!hand) {
+      this.lastMiss = now;
       snap.landmarks = null;
       snap.confidence = 0;
       this.gestures.update(null, 0, 0, now / 1000);
@@ -269,7 +289,7 @@ export class SingleHandFlightController {
     snap.confidence = hand.score;
 
     // ---- (re)acquisition
-    if (!this.tracking || now - this.lastSeen > LOST_AFTER_MS) {
+    if (!this.tracking) {
       this.fx.reset();
       this.fy.reset();
       this.fa.reset();
@@ -283,6 +303,10 @@ export class SingleHandFlightController {
     }
     this.lastSeen = now;
     snap.everTracked = true;
+    if (this.lockedHand === null && hand.score > 0.8) {
+      this.lockVotes[hand.handedness]++;
+      if (this.lockVotes.Left + this.lockVotes.Right >= 8) this.lockedHand = this.lockVotes.Left > this.lockVotes.Right ? 'Left' : 'Right';
+    }
 
     const px = this.fx.filter(f.palmCenter.x, t);
     const py = this.fy.filter(f.palmCenter.y, t);
@@ -391,7 +415,10 @@ export class SingleHandFlightController {
     }
     const since = now - this.lastSeen;
     snap.lostFor = since / 1000;
-    if (this.tracking && since > LOST_AFTER_MS) {
+    // "lost" needs evidence: the detector saw no hand after the last sighting,
+    // or nothing at all has arrived for a long time (stalled camera / tracker)
+    const missed = this.lastMiss > this.lastSeen && since > LOST_AFTER_MS;
+    if (this.tracking && (missed || since > STALL_AFTER_MS)) {
       this.tracking = false;
       snap.landmarks = null;
       this.gestures.reset();

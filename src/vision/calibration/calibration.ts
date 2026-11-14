@@ -20,8 +20,9 @@ export function defaultCalibration(hand: Handedness, aspect = 4 / 3): GestureCal
     wristNeutral: 0,
     wristCcw: 0.5,
     wristCw: 0.5,
-    opennessOpen: 0.9,
-    opennessFist: 0.12,
+    // measured on real hands with MediaPipe: a flat hand reads ≈0.8, a fist ≈0.02
+    opennessOpen: 0.8,
+    opennessFist: 0.06,
     handScale: 0.2,
     pinchOpen: 1.1,
   };
@@ -140,6 +141,13 @@ export class CalibrationSession {
   }
 
   /** @param f features, or null when no hand is visible. @param t seconds */
+  /** Tally which hand the detector reports while calibrating (the hand the player actually uses). */
+  private votes = { Left: 0, Right: 0 };
+  noteHand(h: Handedness): void {
+    this.votes[h]++;
+    this.result.hand = this.votes.Left > this.votes.Right ? 'Left' : 'Right';
+  }
+
   update(f: HandFeatures | null, t: number, dt: number): void {
     const id = this.step.id;
     if (id === 'done') return;

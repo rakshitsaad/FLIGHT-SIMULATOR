@@ -77,6 +77,13 @@ export class FlightModel {
   autoTrim = true;
   /** Assist: start the engine automatically when the throttle is advanced. */
   autoStart = true;
+  /**
+   * Assist: limit the elevator so that stick + trim cannot hold the wing
+   * beyond its stalling angle (a "stick pusher"). The wing can still stall
+   * dynamically — in a zoom climb, a gust or an abrupt pull — but simply
+   * holding the stick back gives maximum lift instead of a departure.
+   */
+  stallProtection = true;
   /** Invulnerability for sandbox experiments. */
   invulnerable = false;
 
@@ -555,7 +562,22 @@ export class FlightModel {
     const qTail = qbar + spec.propwash * Math.max(thrust, 0) / S;
     const aM = clamp(alpha, -0.6, 0.6);
     const stallAuth = 1 - 0.6 * sigma;
-    const Mp = qbar * S * ch * (spec.cm0 + spec.cmAlpha * aM + spec.cmFlap * flap + spec.cmQ * qh) + qTail * S * ch * spec.cmDe * c.elevator;
+    let elevator = c.elevator;
+    if (this.stallProtection && V > 8) {
+      // stick pusher: the elevator may only hold the wing just below its stall
+      // angle, accounting for propwash over the tail, and pushes when alpha
+      // (or its trend) goes past it
+      const margin = 1.5 * DEG;
+      const aMax = spec.alphaStall - spec.flapStallShift * flap - margin;
+      const aMin = -(spec.alphaStallNeg - margin);
+      const ratio = qbar / Math.max(qTail, 1);
+      const aPred = alpha + q * 0.25;
+      const eMax = (-(spec.cm0 + spec.cmAlpha * aMax + spec.cmFlap * flap) / spec.cmDe) * ratio - 10 * Math.max(0, aPred - aMax);
+      const eMin = (-(spec.cm0 + spec.cmAlpha * aMin + spec.cmFlap * flap) / spec.cmDe) * ratio + 10 * Math.max(0, aMin - aPred);
+      if (elevator > eMax) elevator = eMax;
+      if (elevator < eMin) elevator = eMin;
+    }
+    const Mp = qbar * S * ch * (spec.cm0 + spec.cmAlpha * aM + spec.cmFlap * flap + spec.cmQ * qh) + qTail * S * ch * spec.cmDe * elevator;
     const wobble = sigma * spec.stallRoll * (0.045 * Math.sin(s.time * 2.3 + this.stallPhase) + 0.5 * rh + 0.02 * Math.sign(beta || 1));
     const Lr = qbar * S * b * (spec.clBeta * beta + spec.clP * ph + spec.clR * rh + spec.clDa * c.aileron * stallAuth + wobble + 0.02 * dmg);
     const Ny = qbar * S * b * (spec.cnBeta * beta + spec.cnR * rh + spec.cnP * ph + spec.cnDa * c.aileron) + qTail * S * b * spec.cnDr * c.rudder;
@@ -672,7 +694,7 @@ export class FlightModel {
         } else {
           // structure hitting the ground
           const lethal = sink > 7 || (speed > 38 && cp.label !== 'belly' && cp.label !== 'tail') || (speed > 70 && cp.label !== 'tail');
-          const amount = cp.label === 'belly' ? 0.12 + sink * 0.08 : cp.label === 'tail' ? 0.04 + sink * 0.05 : 0.18 + sink * 0.1 + speed * 0.004;
+          const amount = cp.label === 'belly' ? 0.12 + sink * 0.08 : cp.label === 'tail' ? (sink > 1.2 ? 0.02 + sink * 0.04 : 0) : 0.18 + sink * 0.1 + speed * 0.004;
           this.hurt(amount, cp.label === 'belly' ? 'belly landing' : `${cp.label} strike`, lethal);
           if (cp.label === 'belly' && !this.inContact.some((v, j) => v && j !== i)) {
             this.events.push({ type: 'touchdown', point: cp, sinkRate: Math.max(sink, 0), speed, surface: this.surface, first: !s.onGround });
@@ -719,7 +741,8 @@ export class FlightModel {
         const vtl = vt.length();
         const mu = water ? 1.4 : 0.55;
         if (vtl > 1e-4) f.addScaledVector(vt, (-mu * fn * Math.tanh(vtl / 0.5)) / vtl);
-        if (!water && vtl > 12) this.hurt(0.00001 * vtl, 'ground scrape', false);
+        // sliding on the nose or a wingtip keeps tearing the airframe; a tail skid or belly just grinds
+        if (!water && vtl > 12 && cp.label !== 'tail' && cp.label !== 'belly') this.hurt(0.00001 * vtl, 'ground scrape', false);
       }
       f.addScaledVector(n, fn);
       force.add(f);

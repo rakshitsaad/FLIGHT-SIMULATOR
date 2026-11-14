@@ -131,7 +131,7 @@ export class Simulation {
   }
 
   /** Begin a new flight. */
-  start(aircraftId: AircraftId, spawnId: string, assists?: { autoTrim: boolean; autoStart: boolean }): void {
+  start(aircraftId: AircraftId, spawnId: string, assists?: { autoTrim: boolean; autoStart: boolean; stallProtection?: boolean }): void {
     this.finishFlight();
     const spec = AIRCRAFT[aircraftId];
     const spawn = SPAWNS.find((s) => s.id === spawnId) ?? SPAWNS[0];
@@ -140,6 +140,7 @@ export class Simulation {
     if (assists) {
       this.model.autoTrim = assists.autoTrim;
       this.model.autoStart = assists.autoStart;
+      this.model.stallProtection = assists.stallProtection ?? true;
     }
     this.landing = new LandingEvaluator(spec);
     this.replay = null;
@@ -186,6 +187,19 @@ export class Simulation {
     this.recorder.start(spec.id, spawn.label, this.model.state);
     this.region = regionAt(spawn.x, spawn.z);
     this.syncView(1);
+  }
+
+  /** Park an aircraft at a spawn point without flying it (menu / hangar backdrop). */
+  preview(aircraftId: AircraftId, spawnId: string): void {
+    this.finishFlight();
+    this.collision?.clearDebris();
+    const spawn = SPAWNS.find((s) => s.id === spawnId && !s.airborne) ?? SPAWNS[0];
+    this.spawn = spawn;
+    this.model = new FlightModel(AIRCRAFT[aircraftId], terrainGround);
+    this.replay = null;
+    this.placeAtSpawn();
+    this.mode = 'idle';
+    this.paused = false;
   }
 
   /** Put the same aircraft back at its spawn point (after a crash, or on request). */

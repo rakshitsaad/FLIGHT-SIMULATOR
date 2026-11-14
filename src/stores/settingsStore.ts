@@ -36,6 +36,8 @@ export interface Settings {
   /* assists */
   autoTrim: boolean;
   autoStart: boolean;
+  /** Stick pusher: holding the stick back gives maximum lift instead of a stall. */
+  stallProtection: boolean;
   /** Hand mode: hold the wheel brakes while the hand is fully open on the ground. */
   autoBrake: boolean;
   /** Level the aircraft if hand tracking is lost in the air. */
@@ -70,6 +72,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showHandPreview: true,
   autoTrim: true,
   autoStart: true,
+  stallProtection: true,
   autoBrake: true,
   lostHandAssist: true,
   firstRunDone: false,

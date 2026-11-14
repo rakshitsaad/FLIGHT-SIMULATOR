@@ -167,6 +167,7 @@ describe('flight model', () => {
   it('stalls near the published stall speed and recovers', () => {
     for (const id of AIRCRAFT_ORDER) {
       const r = new Rig(id);
+      r.fm.stallProtection = false; // raw aerodynamics
       const vs = stallSpeeds(r.fm.spec);
       r.air(2000, vs.clean * 1.5);
       r.input.throttle = 0;
@@ -345,5 +346,26 @@ describe('flight model', () => {
     const t = new Rig('trainer', water);
     land(t);
     expect(t.s.damage).toBeGreaterThan(0.2);
+  });
+});
+
+describe('ham-fisted take-off', () => {
+  it('survives full back stick held from brake release (tail skid, no stall on the ground)', () => {
+    for (const id of AIRCRAFT_ORDER) {
+      const r = new Rig(id);
+      r.ground();
+      r.input.throttle = 1;
+      r.input.pitch = 1;
+      let airborne = false;
+      r.run(120, (s) => {
+        // the pull is never released and no roll correction is made
+        if (!s.onGround) airborne = true;
+        return s.destroyed || s.altitudeAgl > 60;
+      });
+      expect(r.s.destroyed, `${id} not destroyed`).toBe(false);
+      expect(airborne, `${id} lifts off`).toBe(true);
+      expect(r.s.altitudeAgl, `${id} climbs away`).toBeGreaterThan(50);
+      expect(r.s.damage, `${id} damage`).toBeLessThan(0.2);
+    }
   });
 });

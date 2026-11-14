@@ -246,12 +246,13 @@ export const HIGHWAYS: HighwayDef[] = [
   { id: 'north', width: 22, points: [[-600, -6250], [0, -8200], [1500, -10200], [3800, -11600], [5700, -12400]] },
   { id: 'west', width: 22, points: [[-3500, -4300], [-5600, -4700], [-8000, -5600], [-10500, -6100], [-12800, -6900]] },
   { id: 'farm', width: 16, points: [[16700, -5450], [18200, -7400], [19500, -10200], [21000, -12800], [21400, -13600]] },
+  { id: 'mill', width: 14, points: [[10800, -7300], [8300, -7650], [7250, -7700], [6000, -7750], [3000, -8600], [300, -8350]] },
 ];
 
 /** Bridges are handcrafted: a suspension bridge and a girder bridge over the Silverrun. */
 export const BRIDGES = [
-  { id: 'gate', name: 'Aerona Gate Bridge', kind: 'suspension' as const, x: 8100, z: -2600, heading: 80, length: 1150, width: 30, deck: 58, tower: 190 },
-  { id: 'mill', name: 'Millrace Bridge', kind: 'girder' as const, x: 7250, z: -7700, heading: 95, length: 700, width: 16, deck: 30, tower: 0 },
+  { id: 'gate', name: 'Aerona Gate Bridge', kind: 'suspension' as const, x: 8100, z: -2600, heading: 100.6, length: 1100, width: 30, deck: 26, tower: 125 },
+  { id: 'mill', name: 'Millrace Bridge', kind: 'girder' as const, x: 7250, z: -7700, heading: 87.5, length: 640, width: 16, deck: 14, tower: 0 },
 ];
 
 export interface VillageDef {

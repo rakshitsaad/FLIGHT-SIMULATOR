@@ -63,6 +63,8 @@ export interface HandFeatures {
   thumbTuck: number;
   /** Direction of the thumb in mirrored image space (unit-ish vector, y down). */
   thumbDirection: Vec2;
+  /** How far the thumb tip sticks out above every other landmark, as a fraction of the hand's height in the image. */
+  thumbProminence: number;
 }
 
 export type GestureName = 'pinch' | 'thumbsUp' | 'victory' | 'fist';

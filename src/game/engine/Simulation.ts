@@ -248,7 +248,8 @@ export class Simulation {
   /* ---------------------------------------------------------------- loop */
 
   update(realDt: number): void {
-    const dt = Math.min(realDt, 0.1);
+    // up to 0.25 s per frame keeps the sim in real time down to 4 fps
+    const dt = Math.min(realDt, 0.25);
     if (this.paused) return;
     if (this.mode === 'replay') {
       if (this.replay) {
@@ -266,12 +267,12 @@ export class Simulation {
     }
     this.acc += dt;
     let n = 0;
-    while (this.acc >= FIXED_DT && n < 6) {
+    while (this.acc >= FIXED_DT && n < 15) {
       this.step(FIXED_DT);
       this.acc -= FIXED_DT;
       n++;
     }
-    if (n === 6) this.acc = 0; // spiral-of-death guard
+    if (n === 15) this.acc = 0; // spiral-of-death guard
     this.syncView(this.acc / FIXED_DT);
   }
 

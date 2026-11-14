@@ -19,6 +19,10 @@ import { sim } from './Simulation';
 export const worldRef: { current: WorldScene | null } = { current: null };
 export const perf = { fps: 60, frameMs: 16, drawCalls: 0, triangles: 0 };
 
+/** Full-screen pages hide the 3D world: stop rendering it so the CPU/GPU go to hand tracking. */
+const COVERED = new Set(['aircontrol', 'history', 'settings', 'map']);
+export const renderState = { paused: false };
+
 function World({ cfg }: { cfg: GraphicsConfig }) {
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera) as PerspectiveCamera;
@@ -40,7 +44,7 @@ function World({ cfg }: { cfg: GraphicsConfig }) {
   useFrame((_, delta) => {
     const w = world.current;
     if (!w) return;
-    const dt = Math.min(delta, 0.1);
+    const dt = Math.min(delta, 0.25);
     const app = useApp.getState();
     sim.paused = app.paused && app.screen === 'flight';
     controls.frame(dt);
@@ -73,6 +77,20 @@ function World({ cfg }: { cfg: GraphicsConfig }) {
 
 export function GameCanvas() {
   const graphics = useSettings((s) => s.graphics);
+  const screen = useApp((s) => s.screen);
+  const covered = COVERED.has(screen);
+  renderState.paused = covered;
+  // while the world is not rendered, keep input/controller timing alive at a low rate
+  useEffect(() => {
+    if (!covered) return;
+    let last = performance.now();
+    const id = setInterval(() => {
+      const now = performance.now();
+      controls.frame(Math.min(0.25, (now - last) / 1000));
+      last = now;
+    }, 33);
+    return () => clearInterval(id);
+  }, [covered]);
   const cfg = GRAPHICS[graphics];
   const [dpr, setDpr] = useState(cfg.dpr);
   useEffect(() => setDpr(cfg.dpr), [cfg]);
@@ -80,6 +98,7 @@ export function GameCanvas() {
     <Canvas
       key={graphics}
       className="game-canvas"
+      frameloop={covered ? 'never' : 'always'}
       shadows={cfg.shadows ? { type: PCFShadowMap } : false}
       dpr={[1, Math.min(dpr, window.devicePixelRatio || 1)]}
       gl={{ antialias: cfg.antialias, powerPreference: 'high-performance', stencil: false }}

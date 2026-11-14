@@ -21,7 +21,7 @@ FPS = 30
 def sh(*args):
     subprocess.check_call(['ffmpeg', '-v', 'error', '-y', *args])
 
-for name in ['left_hands.jpg', 'fist.jpg', 'thumb_up.jpg', 'victory.jpg']:
+for name in ['left_hands.jpg', 'fist.jpg', 'thumb_up.jpg', 'victory.jpg', 'pointing_up.jpg']:
     if not os.path.exists(name):
         urllib.request.urlretrieve(BASE + name, name)
 
@@ -36,6 +36,8 @@ def framed(src, dst, dx, dy, rot=0.0):
 framed('fist.jpg', 'fist.png', 43, 100, -0.265)
 framed('thumb_up.jpg', 'thumb.png', 40, 7)
 framed('victory.jpg', 'victory.png', 39, 30)
+# middle, ring and little finger closed with the thumb NOT wrapped: full throttle without the pause gesture
+framed('pointing_up.jpg', 'point.png', 67, 34)
 sh('-f', 'lavfi', '-i', f'color=c={WALL}:s=640x480', '-frames:v', '1', 'blank.png')
 
 def piecewise(keys, idx):
@@ -57,28 +59,28 @@ def moving(src, keys, bg):
 def still(src, seconds, dx=0, dy=0, bg=WALL):
     moving(src, [(0, dx, dy, 0), (seconds, dx, dy, 0)], bg)
 
-# ---- phase A: calibration choreography, 36 s, repeated four times (0 – 144 s)
+# ---- phase A: calibration choreography, 36 s, repeated five times (0 – 180 s)
 CAL = [(0,0,0,0),(5,0,0,0),(6,-110,0,0),(7.5,-110,0,0),(9.5,110,0,0),(11,110,0,0),(12,0,0,0),(15,0,0,0),
        (16,0,-80,0),(17.5,0,-80,0),(19.5,0,80,0),(21,0,80,0),(22,0,0,0),(25,0,0,0),
        (26,0,0,0.5),(27.5,0,0,0.5),(29.5,0,0,-0.5),(31,0,0,-0.5),(32,0,0,0),(33,0,0,0)]
-for _ in range(4):
+for _ in range(5):
     moving('open.png', CAL, 'white')
     still('fist.png', 3)
-# ---- phase B: a flight, starting at 144 s
-still('open.png', 6, bg='white')            # 144  open hand: idle, brakes held
-still('fist.png', 70, 0, -30)               # 150  fist, held slightly high: full power, gentle back pressure
-still('fist.png', 3, -60, -30)              # 220  ...moved to the player's right: bank right
-still('fist.png', 17, 0, -30)               # 223  back to centre
-still('thumb.png', 3)                       # 240  thumbs up: autopilot
-still('open.png', 6, bg='white')            # 243
-still('victory.png', 3)                     # 249  victory: flaps
-still('open.png', 4, bg='white')            # 252
-still('blank.png', 5)                       # 256  hand leaves the picture: tracking lost
-still('open.png', 19, bg='white')           # 261
-still('fist.png', 6)                        # 280  tight fist held: emergency pause
-still('open.png', 6, bg='white')            # 286
-still('fist.png', 6)                        # 292  tight fist held again: resume
-still('open.png', 12, bg='white')           # 298 – 310
+# ---- phase B: a flight, starting at 180 s (times below are seconds after B)
+still('open.png', 6, bg='white')            # B+0    open hand: idle, brakes held
+still('point.png', 70, 0, -30)              # B+6    throttle fingers closed, hand held slightly high: full power, gentle back pressure
+still('point.png', 3, -60, -30)             # B+76   ...moved to the player's right: bank right
+still('point.png', 17, 0, -30)              # B+79   back to centre
+still('thumb.png', 3)                       # B+96   thumbs up: autopilot
+still('open.png', 6, bg='white')            # B+99
+still('victory.png', 3)                     # B+105  victory: flaps
+still('open.png', 4, bg='white')            # B+108
+still('blank.png', 5)                       # B+112  hand leaves the picture: tracking lost
+still('open.png', 19, bg='white')           # B+117
+still('fist.png', 6)                        # B+136  tight fist held: emergency pause
+still('open.png', 6, bg='white')            # B+142
+still('fist.png', 6)                        # B+148  tight fist held again: resume
+still('open.png', 12, bg='white')           # B+154 – B+166
 
 with open('list.txt', 'w') as f:
     for s in segments:

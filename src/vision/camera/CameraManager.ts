@@ -22,6 +22,8 @@ export class CameraManager {
   state: CameraState = 'idle';
   error = '';
   deviceLabel = '';
+  /** performance.now() when the stream went live. */
+  startedAt = 0;
   /** Mean luma 0..255 of the latest probe, -1 when unknown. */
   brightness = -1;
   private probe: HTMLCanvasElement | null = null;
@@ -70,6 +72,7 @@ export class CameraManager {
         this.stream = null;
       });
       this.state = 'live';
+      this.startedAt = performance.now();
       this.error = '';
       return this.state;
     } catch (e) {
